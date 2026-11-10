@@ -15,7 +15,6 @@ namespace SimuladorTransferenciaDeCalor
             materiais = CriarMateriais();
             CarregarLista();
 
-
         }
         private ListaDuplaEncade<Material> CriarMateriais()
         {
