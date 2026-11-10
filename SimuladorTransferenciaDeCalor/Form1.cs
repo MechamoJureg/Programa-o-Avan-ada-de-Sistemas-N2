@@ -16,8 +16,6 @@ namespace SimuladorTransferenciaDeCalor
             CarregarLista();
 
 
-            MessageBox.Show("Quantidade de materiais: " + materiais.GetQuantidade() + "\nPrimeiro material: " + materiais.ObterViaProx(0).GetNome());
-
         }
         private ListaDuplaEncade<Material> CriarMateriais()
         {
@@ -195,7 +193,7 @@ namespace SimuladorTransferenciaDeCalor
         private void timerSimulacao_Tick(object sender, EventArgs e)
         {
             double deltaTempo = (timerSimulacao.Interval / 1000.0) * 50;
-            simulador.SimularPasso(deltaTempo);
+            simulador.SimularPassoSequencial(deltaTempo);   // antes: SimularPasso
 
             tempoDecorrido += deltaTempo;
             labelTempo.Text = "Tempo decorrido: " + tempoDecorrido.ToString("F1") + "s";

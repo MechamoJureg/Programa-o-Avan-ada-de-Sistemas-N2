@@ -59,7 +59,7 @@ namespace SimuladorTransferenciaDeCalor
             corpo2.SetTemp(corpo2.GetTemp() + variacao2);
         }
 
-        public void SimularPasso(double deltaTempo)
+        public void SimularPassoSequencial(double deltaTempo)
         {
             int tamanho = grade.GetTamanho();
 
