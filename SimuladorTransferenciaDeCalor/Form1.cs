@@ -1,4 +1,5 @@
 using SimuladorTransferenciaDeCalor.Classes;
+using SimuladorTransferenciaDeCalor.Persistencia;
 
 namespace SimuladorTransferenciaDeCalor
 {
@@ -10,6 +11,14 @@ namespace SimuladorTransferenciaDeCalor
         private CelulaGradiente[,] celulas;   // Painéis que desenham o degradê de cada quadrado
         private Simulador simulador;
         private double tempoDecorrido = 0;
+
+        // Grava os resultados de cada iteração. Hoje usa o RepositorioNulo (não grava nada).
+        // Quando o banco MySQL estiver pronto, basta trocar por: new GravadorSimulacao(new RepositorioMySql(...)).
+        private GravadorSimulacao gravador = new GravadorSimulacao(new RepositorioNulo());
+
+        // Indica qual algoritmo gera os dados gravados (usado para comparar N1 x N2 no banco e no relatório).
+        // Se trocar a chamada no timerSimulacao_Tick para o sequencial, troque este texto também.
+        private const string VersaoSimulador = "paralela";
 
         // Pontos de referência da escala de cores, do mais frio ao mais quente.
         // Entre dois pontos consecutivos a cor é interpolada, o que gera a transição suave.
@@ -32,6 +41,14 @@ namespace SimuladorTransferenciaDeCalor
             InitializeComponent();
             materiais = CriarMateriais();
             CarregarLista();
+        }
+
+        // Ao fechar a janela, encerra a gravação em andamento para que nada fique pendente
+        // (importante quando o repositório usa lote ou fila).
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            gravador.Finalizar();
+            base.OnFormClosing(e);
         }
 
         private ListaDuplaEncade<Material> CriarMateriais()
@@ -61,6 +78,13 @@ namespace SimuladorTransferenciaDeCalor
             {
                 boxMaterial.Items.Add(materiais.ObterViaProx(i));  //Carrega todos os materias a caixa de seleção.
             }
+        }
+
+        // Tempo simulado de cada passo, em segundos. Fica num método único porque tanto o
+        // cálculo (timer) quanto a gravação (estado inicial) precisam do mesmo valor.
+        private double ObterDeltaTempo()
+        {
+            return (timerSimulacao.Interval / 1000.0) * 50;
         }
 
         private void BotaoCriarGrade(object sender, EventArgs e)
@@ -150,6 +174,10 @@ namespace SimuladorTransferenciaDeCalor
 
                 // Preenche textos e cores iniciais de todos os quadrados de uma vez.
                 AtualizarGrade();
+
+                // Começa a gravar esta nova simulação: registra os materiais, a simulação em si
+                // e o estado inicial da grade (iteração 0). Se havia outra em andamento, ela é encerrada.
+                gravador.Iniciar(grade, materiais, ObterDeltaTempo(), VersaoSimulador);
             }
             catch (Exception ex)
             {
@@ -255,13 +283,17 @@ namespace SimuladorTransferenciaDeCalor
 
         private void timerSimulacao_Tick(object sender, EventArgs e)
         {
-            double deltaTempo = (timerSimulacao.Interval / 1000.0) * 50;
+            double deltaTempo = ObterDeltaTempo();
 
-            // Versão paralela (N2). Para voltar à versão da N1, troque por SimularPassoSequencial.
+            // Versão paralela (N2). Para voltar à versão da N1, troque por SimularPassoSequencial
+            // (e ajuste a constante VersaoSimulador no topo da classe).
             simulador.SimularPassoParalelo(deltaTempo);
 
             tempoDecorrido += deltaTempo;
             labelTempo.Text = "Tempo decorrido: " + tempoDecorrido.ToString("F1") + "s";
+
+            // Grava o estado de todos os corpos após este passo (iteração atual).
+            gravador.RegistrarIteracao(grade, tempoDecorrido);
 
             AtualizarGrade();
         }
