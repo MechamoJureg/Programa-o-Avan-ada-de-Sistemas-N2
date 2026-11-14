@@ -12,9 +12,11 @@ namespace SimuladorTransferenciaDeCalor
         private Simulador simulador;
         private double tempoDecorrido = 0;
 
-        // Grava os resultados de cada iteração. Hoje usa o RepositorioNulo (não grava nada).
-        // Quando o banco MySQL estiver pronto, basta trocar por: new GravadorSimulacao(new RepositorioMySql(...)).
-        private GravadorSimulacao gravador = new GravadorSimulacao(new RepositorioNulo());
+        // Grava os resultados de cada iteração no banco MySQL.
+        // A string de conexão (usuário e senha) vem de uma variável de ambiente para não ir parar no Git.
+        // Para voltar a não gravar nada (ex.: benchmark do cálculo puro), troque por: new RepositorioNulo().
+        private GravadorSimulacao gravador = new GravadorSimulacao(
+            new RepositorioMySql(Environment.GetEnvironmentVariable("SIMULADOR_DB")));
 
         // Indica qual algoritmo gera os dados gravados (usado para comparar N1 x N2 no banco e no relatório).
         // Se trocar a chamada no timerSimulacao_Tick para o sequencial, troque este texto também.
@@ -45,9 +47,18 @@ namespace SimuladorTransferenciaDeCalor
 
         // Ao fechar a janela, encerra a gravação em andamento para que nada fique pendente
         // (importante quando o repositório usa lote ou fila).
+        // O try/catch evita que uma falha do banco impeça o fechamento ou gere uma janela de erro do sistema.
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            gravador.Finalizar();
+            try
+            {
+                gravador.Finalizar();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Erro ao finalizar a gravação no banco: " + ex.Message);
+            }
+
             base.OnFormClosing(e);
         }
 
@@ -293,7 +304,16 @@ namespace SimuladorTransferenciaDeCalor
             labelTempo.Text = "Tempo decorrido: " + tempoDecorrido.ToString("F1") + "s";
 
             // Grava o estado de todos os corpos após este passo (iteração atual).
-            gravador.RegistrarIteracao(grade, tempoDecorrido);
+            // Se o banco falhar, pausa a simulação e avisa o usuário, em vez de repetir o erro a cada tick.
+            try
+            {
+                gravador.RegistrarIteracao(grade, tempoDecorrido);
+            }
+            catch (Exception ex)
+            {
+                timerSimulacao.Stop();
+                MessageBox.Show("Falha ao gravar no banco. Simulação pausada.\n" + ex.Message);
+            }
 
             AtualizarGrade();
         }
